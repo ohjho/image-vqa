@@ -67,7 +67,7 @@ def get_user_image(clear_context: bool = True, force_b64: bool = True):
 def get_openrouter_api_key():
     # OpenReuter Credentials
     api_key = None
-    with st.sidebar.expander("OpenRouter config", expanded=True):
+    with st.sidebar.expander("OpenRouter config", expanded=False):
         if "OpenRouter_key" in st.secrets:
             st.success("OpenRouter API key already provided!", icon="✅")
             api_key = st.secrets["OpenRouter_key"]
@@ -96,12 +96,12 @@ def build_llm(
         openai_api_key=api_key,
         openai_api_base="https://openrouter.ai/api/v1",
         model_name=model_name,
-        # model_kwargs={
-        #   "headers": {
-        #     "HTTP-Referer": getenv("APP_URL"), # Optional, for including app on Openrouter's ranking
-        #     "X-Title": getenv("APP_TITLE"),
-        #   }
-        # },
+        model_kwargs={
+            "headers": {
+                "HTTP-Referer": "https://image-qna.streamlit.app/",  # Optional, for including app on Openrouter's ranking
+                "X-Title": "Image Q&A",
+            }
+        },
     )
 
 
