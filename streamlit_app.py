@@ -96,12 +96,12 @@ def build_llm(
         openai_api_key=api_key,
         openai_api_base="https://openrouter.ai/api/v1",
         model_name=model_name,
-        model_kwargs={
-            "headers": {
-                "HTTP-Referer": "https://image-qna.streamlit.app/",  # Optional, for including app on Openrouter's ranking
-                "X-Title": "Image Q&A",
-            }
-        },
+        # model_kwargs={
+        #     "headers": {
+        #         "HTTP-Referer": "https://image-qna.streamlit.app/",  # Optional, for including app on Openrouter's ranking
+        #         "X-Title": "Image Q&A",
+        #     }
+        # },
     )
 
 
