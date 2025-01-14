@@ -148,7 +148,7 @@ def Main():
         )
         temperature = st.sidebar.slider(
             "temperature",
-            0.7,
+            value=0.7,
             min_value=0.0,
             max_value=1.0,
             help="lower temperature's responses are more deterministic, higher temperature's more creative",
