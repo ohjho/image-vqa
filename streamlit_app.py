@@ -85,7 +85,9 @@ def get_openrouter_api_key():
 
 @st.cache_resource
 def build_llm(
-    api_key: str, model_name: str = "meta-llama/llama-3.2-11b-vision-instruct:free"
+    api_key: str,
+    model_name: str = "meta-llama/llama-3.2-11b-vision-instruct:free",
+    temperature: float = 0.7,
 ):
     """creating an OpenRouter LLM
     free model list: https://openrouter.ai/models?order=pricing-low-to-high&max_price=0
@@ -96,6 +98,7 @@ def build_llm(
         openai_api_key=api_key,
         openai_api_base="https://openrouter.ai/api/v1",
         model_name=model_name,
+        temperature=temperature,
         # model_kwargs={
         #     "headers": {
         #         "HTTP-Referer": "https://image-qna.streamlit.app/",  # Optional, for including app on Openrouter's ranking
@@ -143,7 +146,14 @@ def Main():
             "meta-llama/llama-3.2-11b-vision-instruct:free",
             help="[list of free LVLM available at OpenRouter](https://openrouter.ai/models?max_price=0&order=pricing-low-to-high&modality=text%2Bimage-%3Etext)",
         )
-        llm = build_llm(api_key, model_name=model_name)
+        temperature = st.sidebar.slider(
+            "temperature",
+            0.7,
+            min_value=0.0,
+            max_value=1.0,
+            help="lower temperature's responses are more deterministic, higher temperature's more creative",
+        )
+        llm = build_llm(api_key, model_name=model_name, temperature=temperature)
         msg = st.toast(f"LLM {model_name} loaded from OpenRouter")
 
     # Get User's Image
