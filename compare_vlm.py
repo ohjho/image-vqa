@@ -2,6 +2,7 @@ import streamlit as st
 import os, sys, base64, httpx
 from io import BytesIO
 from PIL import Image
+from copy import deepcopy
 from st_multimodal_chatinput import multimodal_chatinput
 from file_chat_input import file_chat_input
 from streamlit_float import float_init
@@ -90,15 +91,18 @@ def build_llm(
     )
 
 
-def generate_response(llm):
+def generate_response(llm, model_name: str):
     """Function for generating LLM response"""
-    message = st.session_state.messages
-    msg = st.toast(f"message context: {len(message)}")
+    messages = deepcopy(st.session_state.messages)
+    messages = [m for m in messages if m["role"] in [model_name, "assistant", "user"]]
+    for m in messages:
+        m["role"] = "assistant" if m["role"] == model_name else m["role"]
+    # msg = st.toast(f"message context: {len(message)}")
     try:
-        r = llm.invoke(message)
+        r = llm.invoke(messages)
         return r.content
     except Exception as e:
-        msg.toast(f"LLM invoke error: {e}")
+        st.toast(f"LLM invoke error: {e}")
         return None
 
 
@@ -159,30 +163,93 @@ def write_message(msg, st_container):
             return None
 
 
+@st.fragment
+def show_chat_interface(
+    chatinput, st_container, llm, model_name: str, page_theme: str = "dark"
+):
+    # Display Previous chat messages
+    msg_history = [
+        m
+        for m in st.session_state.messages
+        if m["role"] in ["assistant", "user", model_name]
+    ]
+    for message in msg_history:
+        write_message(
+            message,
+            st_container=st_container.chat_message(
+                message["role"],
+                avatar=(
+                    get_llm_icon(model_name, theme=page_theme)
+                    if message["role"] != "user"
+                    else None
+                ),
+            ),
+        )
+
+    # Chat Layout management
+    st_msg_board = st_container.empty()
+    st_thinking_placeholder = st_container.empty()
+
+    # User-provided prompt
+    if chatinput:
+        if chatinput != msg_history[-1]:
+            st.session_state.messages.append(chatinput)
+            write_message(chatinput, st_container=st_msg_board.chat_message("user"))
+
+    # Generate a new response if last message is from user
+    if not st.session_state.messages[-1]["role"] in [model_name, "assistant"]:
+        with st_thinking_placeholder.chat_message(
+            "assistant", avatar=get_llm_icon(model_name, theme=page_theme)
+        ):
+            with st.spinner("Thinking..."):
+                response = generate_response(llm, model_name=model_name)
+                st.write(response)
+        message = {"role": model_name, "content": response}
+        st.session_state.messages.append(message)
+
+
 def Main():
     # App title
-    st.set_page_config(page_title="🤗💬 Image Q&A")
-    st.sidebar.title("🤗💬 Image Q&A")
+    st.set_page_config(
+        page_title="Image Q&A",
+        layout="wide",
+        page_icon="https://seekingvega.github.io/sv-journal/assets/images/sv-favicon-v2.png",
+    )
+    st.sidebar.title("Image Q&A")
     float_init()
     page_theme = st_theme()["base"]
+    st.logo(get_llm_icon("openrouter", page_theme))
     api_key = get_openrouter_api_key()
 
     # build LLM and RAG Chain
     if api_key:
-        model_name = st.sidebar.text_input(
-            "model name",
+        model_name_1 = st.sidebar.text_input(
+            "model 1",
             "meta-llama/llama-3.2-11b-vision-instruct:free",
+            help="[list of free LVLM available at OpenRouter](https://openrouter.ai/models?max_price=0&order=pricing-low-to-high&modality=text%2Bimage-%3Etext)",
+        )
+        model_name_2 = st.sidebar.text_input(
+            "model 2 (optional)",
+            "",
             help="[list of free LVLM available at OpenRouter](https://openrouter.ai/models?max_price=0&order=pricing-low-to-high&modality=text%2Bimage-%3Etext)",
         )
         temperature = st.sidebar.slider(
             "temperature",
-            value=0.7,
+            value=0.0,
             min_value=0.0,
             max_value=1.0,
             help="lower temperature's responses are more deterministic, higher temperature's more creative",
         )
-        llm = build_llm(api_key, model_name=model_name, temperature=temperature)
-        msg = st.toast(f"LLM {model_name} loaded from OpenRouter")
+        dual_model = model_name_2 and model_name_1
+        llm1 = build_llm(api_key, model_name=model_name_1, temperature=temperature)
+        msg = st.toast(f"LLM {model_name_1} loaded from OpenRouter")
+        llm2 = (
+            build_llm(api_key, model_name=model_name_2, temperature=temperature)
+            if dual_model
+            else None
+        )
+        if llm2:
+            msg.toast(f"LLM {model_name_2} also loaded from OpenRouter")
 
     if st.sidebar.button(f"Clear Context"):
         clear_context()
@@ -196,44 +263,35 @@ def Main():
             }
         ]
 
-    # Display chat messages
-    for message in st.session_state.messages:
-        write_message(
-            message,
-            st_container=st.chat_message(
-                message["role"],
-                avatar=(
-                    get_llm_icon(model_name, theme=page_theme)
-                    if message["role"] != "user"
-                    else None
-                ),
-            ),
-        )
-        # with st.chat_message(message["role"]):
-        #     st.write(message["content"])
-
     # Chat Layout management
-    st_msg_board = st.empty()
-    st_thinking_placeholder = st.empty()
     msg_container = st.container()
-    msg_container.float("bottom: 0")
-
-    # User-provided prompt
     user_input = get_mminput(msg_container)
-    if user_input:
-        st.session_state.messages.append(user_input)
-        write_message(user_input, st_container=st_msg_board.chat_message("user"))
+    msg_container.float("bottom: 0")
+    if dual_model:
+        cols = st.columns(2)
+        chat_container1 = cols[0]
+        chat_container2 = cols[1]
+    else:
+        chat_container1 = st
+        chat_container2 = None
 
-    # Generate a new response if last message is not from assistant
-    if st.session_state.messages[-1]["role"] != "assistant":
-        with st_thinking_placeholder.chat_message(
-            "assistant", avatar=get_llm_icon(model_name, theme=page_theme)
-        ):
-            with st.spinner("Thinking..."):
-                response = generate_response(llm)  # , query=prompt, im=im)
-                st.write(response)
-        message = {"role": "assistant", "content": response}
-        st.session_state.messages.append(message)
+    show_chat_interface(
+        chatinput=user_input,
+        st_container=chat_container1,
+        llm=llm1,
+        model_name=model_name_1,
+        page_theme=page_theme,
+    )
+    if dual_model:
+        show_chat_interface(
+            chatinput=user_input,
+            st_container=chat_container2,
+            llm=llm2,
+            model_name=model_name_2,
+            page_theme=page_theme,
+        )
+    with st.sidebar.expander("debug"):
+        st.write(st.session_state.messages)
 
 
 if __name__ == "__main__":
