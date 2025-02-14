@@ -38,7 +38,10 @@ def get_openrouter_api_key():
     # OpenReuter Credentials
     api_key = None
     with st.sidebar.expander("OpenRouter config", expanded=False):
-        if "OpenRouter_key" in st.secrets:
+        if "OpenRouter_key" in st.secrets and not st.toggle(
+            "use your own API key",
+            help="see free API key limits [here](https://openrouter.ai/docs/api-reference/limits#rate-limits-and-credits-remaining)",
+        ):
             st.success("OpenRouter API key already provided!", icon="✅")
             api_key = st.secrets["OpenRouter_key"]
         else:
@@ -221,35 +224,41 @@ def Main():
     st.logo(get_llm_icon("openrouter", page_theme))
     api_key = get_openrouter_api_key()
 
+    if not api_key:
+        return None
+
     # build LLM and RAG Chain
-    if api_key:
-        model_name_1 = st.sidebar.text_input(
-            "model 1",
-            "meta-llama/llama-3.2-11b-vision-instruct:free",
-            help="[list of free LVLM available at OpenRouter](https://openrouter.ai/models?max_price=0&order=pricing-low-to-high&modality=text%2Bimage-%3Etext)",
-        )
-        model_name_2 = st.sidebar.text_input(
-            "model 2 (optional)",
-            "",
-            help="[list of free LVLM available at OpenRouter](https://openrouter.ai/models?max_price=0&order=pricing-low-to-high&modality=text%2Bimage-%3Etext)",
-        )
-        temperature = st.sidebar.slider(
-            "temperature",
-            value=0.0,
-            min_value=0.0,
-            max_value=1.0,
-            help="lower temperature's responses are more deterministic, higher temperature's more creative",
-        )
-        dual_model = model_name_2 and model_name_1
-        llm1 = build_llm(api_key, model_name=model_name_1, temperature=temperature)
-        msg = st.toast(f"LLM {model_name_1} loaded from OpenRouter")
-        llm2 = (
-            build_llm(api_key, model_name=model_name_2, temperature=temperature)
-            if dual_model
-            else None
-        )
-        if llm2:
-            msg.toast(f"LLM {model_name_2} also loaded from OpenRouter")
+    model_name_1 = st.sidebar.text_input(
+        "model 1",
+        "meta-llama/llama-3.2-11b-vision-instruct:free",
+        help="[list of free LVLM available at OpenRouter](https://openrouter.ai/models?max_price=0&order=pricing-low-to-high&modality=text%2Bimage-%3Etext)",
+    )
+    model_name_2 = st.sidebar.text_input(
+        "model 2 (optional)",
+        "",
+        help="""
+        Add a second model to compare responds side-by-side
+
+        [list of free LVLM available at OpenRouter](https://openrouter.ai/models?max_price=0&order=pricing-low-to-high&modality=text%2Bimage-%3Etext)
+        """,
+    )
+    temperature = st.sidebar.slider(
+        "temperature",
+        value=0.0,
+        min_value=0.0,
+        max_value=1.0,
+        help="lower temperature's responses are more deterministic, higher temperature's more creative",
+    )
+    dual_model = model_name_2 and model_name_1
+    llm1 = build_llm(api_key, model_name=model_name_1, temperature=temperature)
+    msg = st.toast(f"LLM {model_name_1} loaded from OpenRouter")
+    llm2 = (
+        build_llm(api_key, model_name=model_name_2, temperature=temperature)
+        if dual_model
+        else None
+    )
+    if llm2:
+        msg.toast(f"LLM {model_name_2} also loaded from OpenRouter")
 
     if st.sidebar.button(f"Clear Context"):
         clear_context()
@@ -290,8 +299,6 @@ def Main():
             model_name=model_name_2,
             page_theme=page_theme,
         )
-    with st.sidebar.expander("debug"):
-        st.write(st.session_state.messages)
 
 
 if __name__ == "__main__":
