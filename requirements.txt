@@ -2,6 +2,6 @@ httpx==0.28.1
 langchain_openai>=0.3.0
 Pillow==11.1.0
 streamlit>=1.41.1
-#st-multimodal-chatinput~=0.2.1
+st-multimodal-chatinput~=0.2.1
 file-chat-input>=0.0.2
 st-theme~=1.2.3
