@@ -8,6 +8,9 @@ from file_chat_input import file_chat_input
 from streamlit_float import float_init
 from streamlit_theme import st_theme
 
+# multimodal_chatinput supports multi-line but the color thing requires a PR to be merged
+# file_chat_input does not have multi-line
+
 
 ### Helper functions ###
 def image_to_base64(pil_im):
@@ -85,6 +88,10 @@ def build_llm(
         openai_api_base="https://openrouter.ai/api/v1",
         model_name=model_name,
         temperature=temperature,
+        default_headers={
+            "HTTP-Referer": "https://image-qna.streamlit.app/",  # Optional, for including app on Openrouter's ranking
+            "X-Title": "Image Q&A",
+        },
         # model_kwargs={
         #     "headers": {
         #         "HTTP-Referer": "https://image-qna.streamlit.app/",  # Optional, for including app on Openrouter's ranking
@@ -109,18 +116,23 @@ def generate_response(llm, model_name: str):
         return None
 
 
-def chatinput2msg(chatinput):
+def chatinput2msg(chatinput, is_mmci: bool = True):
+    """return formatted message for LLM to use
+    Args:
+        is_mmci: for multimodal_chatinput, otherwise, assumes file_chat_input
+    """
     if not chatinput:
         return None
-    if not chatinput["message"]:  # ["text"]:
+    if not chatinput["text" if is_mmci else "message"]:
         st.toast("Your input must contain text")
         return None
 
     im_msg = []
-    if chatinput["files"]:  # ["images"]:
-        for im in chatinput["files"]:  # ["images"]:
-            if im["content"].startswith("data:image"):
-                im_msg.append({"type": "image_url", "image_url": im["content"]})
+    if chatinput["images" if is_mmci else "files"]:
+        for im in chatinput["images" if is_mmci else "files"]:
+            im_content = im if is_mmci else im["content"]
+            if im_content.startswith("data:image"):
+                im_msg.append({"type": "image_url", "image_url": im_content})
             else:
                 st.toast(f"Problem loading {im} from your input")
                 return None
@@ -130,25 +142,36 @@ def chatinput2msg(chatinput):
             "role": "user",
             "content": [
                 # {"type": "text", "text": chatinput["text"]},
-                {"type": "text", "text": chatinput["message"]},
+                {"type": "text", "text": chatinput["text" if is_mmci else "message"]},
             ]
             + im_msg,
         }
     else:
         # return {"role": "user", "content": chatinput["text"]}
-        return {"role": "user", "content": chatinput["message"]}
+        return {"role": "user", "content": chatinput["text" if is_mmci else "message"]}
 
 
-def get_mminput(st_container):
+def get_mminput(st_container, use_mmci: bool = True):
+    """get formatted multimodal input from user
+    Args:
+        use_mmci: use multimodal_chatinput instead of file_chat_input
+    """
     msg = None
     # chatinput = multimodal_chatinput(
     #     default=None,
     #     disabled=False,  # placeholder="Ask me anything about images..."
     # )
     with st_container:
-        chatinput = file_chat_input("Ask me anything about an image...")
+        chatinput = (
+            multimodal_chatinput(
+                default=None,
+                disabled=False,  # placeholder="Ask me anything about images..."
+            )
+            if use_mmci
+            else file_chat_input("Ask me anything about an image...")
+        )
     if chatinput:
-        msg = chatinput2msg(chatinput)
+        msg = chatinput2msg(chatinput, is_mmci=use_mmci)
     return msg
 
 
@@ -235,7 +258,7 @@ def Main():
     )
     model_name_2 = st.sidebar.text_input(
         "model 2 (optional)",
-        "",
+        "qwen/qwen2.5-vl-72b-instruct:free",
         help="""
         Add a second model to compare responds side-by-side
 
@@ -248,6 +271,14 @@ def Main():
         min_value=0.0,
         max_value=1.0,
         help="lower temperature's responses are more deterministic, higher temperature's more creative",
+    )
+    use_mmci = st.sidebar.toggle(
+        "Use [Multimodal Chat Input](https://github.com/het-25/st-multimodal-chatinput)",
+        value=True,
+        help="""
+        or [file_chat_input](https://github.com/AI-Colleagues/st-components) both have pros and cons :man-shrugging:
+        just waiting for streamlit to release official support really :sweat_smile:
+        """,
     )
     dual_model = model_name_2 and model_name_1
     llm1 = build_llm(api_key, model_name=model_name_1, temperature=temperature)
@@ -273,8 +304,13 @@ def Main():
         ]
 
     # Chat Layout management
+    if page_theme != "dark" and use_mmci:
+        st.toast(
+            f"Multimodal Chat Input text would only show in dark theme!",
+            icon=":material/warning:",
+        )
     msg_container = st.container()
-    user_input = get_mminput(msg_container)
+    user_input = get_mminput(msg_container, use_mmci=use_mmci)
     msg_container.float("bottom: 0")
     if dual_model:
         cols = st.columns(2)
