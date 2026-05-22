@@ -9,7 +9,7 @@ A Streamlit app that lets a user chat with a Vision-Language Model about an imag
 ## Run
 
 ```bash
-pip install -r requirements.txt
+uv sync   # or: pip install -e .
 
 # Single-page (original) app — one model, sidebar image upload
 streamlit run streamlit_app.py
@@ -21,6 +21,8 @@ streamlit run st_entry.py
 streamlit run compare_vlm.py
 ```
 
+Requires `streamlit>=1.56.0` (for `st.chat_input(accept_file=...)`).
+
 The OpenRouter key is read from `st.secrets["OpenRouter_key"]` (`.streamlit/secrets.toml`); if missing or the user toggles "use your own API key", the sidebar prompts for one.
 
 There are no tests, no lint config, and no build step.
@@ -30,11 +32,10 @@ There are no tests, no lint config, and no build step.
 There are three Streamlit entry points and one helper module, with significant duplication that is important to be aware of before editing:
 
 - `streamlit_app.py` — single-VLM page. Image is uploaded once in the sidebar (URL or file), stored as base64 in `st.session_state["image"]`, and re-attached to every turn. Uses `st.chat_input` (text only). Imports helpers (`build_llm`, `get_openrouter_api_key`, `get_llm_icon`, `image_to_base64`, `is_valid_url`) from `compare_vlm.py` at the repo root.
-- `compare_vlm.py` (root) — the Compare-VLMs page **and** the shared helper module imported by `streamlit_app.py`. Supports two models side-by-side, multi-image input via `st_multimodal_chatinput` or `file_chat_input` (toggle), and stores chat history with per-model role names (`messages[i]["role"]` is the model name for assistant turns) so each column filters its own history in `generate_response`.
-- `pages/compare_vlm.py` — a near-identical copy of root `compare_vlm.py`, present because Streamlit's classic multipage routing picks pages out of a `pages/` directory. Keep the two in sync when changing the Compare-VLMs UI, or migrate fully to `st_entry.py`'s `st.navigation` approach.
+- `compare_vlm.py` (root) — the Compare-VLMs page **and** the shared helper module imported by `streamlit_app.py`. Supports two models side-by-side. Multi-image input uses native `st.chat_input(accept_file="multiple", file_type=[...])` (Streamlit ≥1.56.0); the returned `ChatInputValue` is converted to OpenAI-style multimodal messages in `chatinput2msg`. The chat input is wrapped in a `streamlit_float`-pinned container because native bottom-docking is not always reliable in practice. Chat history uses per-model role names (`messages[i]["role"]` is the model name for assistant turns) so each column filters its own history in `generate_response`.
+- `pages/compare_vlm.py` — a symlink to root `compare_vlm.py`, present because Streamlit's classic multipage routing picks pages out of a `pages/` directory. Editing the root file updates both routes automatically.
 - `st_entry.py` — newer multipage entry using `st.navigation([st.Page("./streamlit_app.py"), st.Page("compare_vlm.py")])`. With this entry, the `pages/` directory is not used.
-- `streamlit_app_dev.py` — scratch/dev variant of `streamlit_app.py` using `file_chat_input`; not wired into any entry point.
-- `st-file-chat-input.py` — local scratch file (note the hyphenated, non-importable name).
+- `streamlit_app_dev.py`, `st-file-chat-input.py` — legacy scratch files that imported the now-removed `st_multimodal_chatinput` / `file_chat_input` components. **They will fail at import** under the current deps; retained only for historical reference and not wired into any entry point.
 
 ### Message shape
 
@@ -46,7 +47,7 @@ History lives in `st.session_state.messages` as OpenAI-style dicts. User turns w
 
 ### Theme / icons
 
-`.streamlit/config.toml` pins `theme.base = "dark"` and hides the sidebar nav (`showSidebarNavigation = false`). `streamlit_theme.st_theme()` is read at runtime to pick a light/dark variant of model icons from `unpkg.com/@lobehub/icons-static-png`. `st_multimodal_chatinput`'s text is only legible on the dark theme — a known limitation surfaced as a toast.
+`.streamlit/config.toml` pins `theme.base = "dark"` and hides the sidebar nav (`showSidebarNavigation = false`). `streamlit_theme.st_theme()` is read at runtime to pick a light/dark variant of model icons from `unpkg.com/@lobehub/icons-static-png`.
 
 
 ## Guidelines
