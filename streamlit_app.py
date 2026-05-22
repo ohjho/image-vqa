@@ -88,6 +88,9 @@ def Main():
     st.sidebar.title("🤗💬 Image Q&A")
     page_theme = st_theme()["base"]
     st.logo(get_llm_icon("openrouter", page_theme))
+    # st.navigation(
+    #     [st.Page("pages/compare_vlm.py", title="Compare VLM", icon=":material/rocket:")]
+    # ).run()
     st.sidebar.page_link(
         "./compare_vlm.py",
         label=" Try Compare VLMs! \t :rocket:",
@@ -100,7 +103,7 @@ def Main():
     if api_key:
         model_name = st.sidebar.text_input(
             "model name",
-            "meta-llama/llama-3.2-11b-vision-instruct:free",
+            "google/gemma-4-26b-a4b-it:free",
             help="[list of free LVLM available at OpenRouter](https://openrouter.ai/models?max_price=0&order=pricing-low-to-high&modality=text%2Bimage-%3Etext)",
         )
         temperature = st.sidebar.slider(
