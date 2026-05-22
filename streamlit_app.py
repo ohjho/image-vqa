@@ -83,6 +83,7 @@ if __name__ == "__main__":
         [
             st.Page("pages/image-vqa.py", title="Image Q&A", default=True),
             st.Page("pages/compare_vlm.py", title="Compare VLMs"),
+            st.Page("pages/image_gen.py", title="Image Generation"),
         ],
         position="top",
     )
