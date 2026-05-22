@@ -2,6 +2,7 @@ import streamlit as st
 import httpx
 from io import BytesIO
 from PIL import Image
+from retrying import retry
 from streamlit_theme import st_theme
 from streamlit_app import (
     build_llm,
@@ -54,6 +55,13 @@ def get_user_image(clear_context: bool = True, force_b64: bool = True):
     return st.session_state["image"] if "image" in st.session_state else None
 
 
+@retry(
+    stop_max_attempt_number=5,
+    retry_on_result=lambda result: result is None,
+    wait_exponential_multiplier=1000,
+    wait_exponential_max=10000,
+    wrap_exception=False,
+)
 def generate_response(llm, query, im, use_context: bool = True):
     """Function for generating LLM response"""
     add_context = len(st.session_state.messages) > 1 and use_context

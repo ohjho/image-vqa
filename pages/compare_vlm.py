@@ -1,6 +1,7 @@
 import streamlit as st
 from PIL import Image
 from copy import deepcopy
+from retrying import retry
 from streamlit_float import float_init
 from streamlit_theme import st_theme
 
@@ -20,6 +21,13 @@ def clear_context():
     st.toast("chat history cleared!")
 
 
+@retry(
+    stop_max_attempt_number=5,
+    retry_on_result=lambda result: result is None,
+    wait_exponential_multiplier=1000,
+    wait_exponential_max=10000,
+    wrap_exception=False,
+)
 def generate_response(llm, model_name: str):
     """Function for generating LLM response"""
     messages = deepcopy(st.session_state.messages)
