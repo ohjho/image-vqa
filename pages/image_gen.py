@@ -12,7 +12,6 @@ from streamlit_app import (
     image_to_base64,
 )
 
-
 MODELS = [
     "google/gemini-2.5-flash-image",
     "google/gemini-3-pro-image-preview",
@@ -109,7 +108,7 @@ def reset_state():
 def Main():
     st.set_page_config(
         page_title="Image Generation",
-        layout="centered",
+        layout="wide",
         page_icon="https://seekingvega.github.io/sv-journal/assets/images/sv-favicon-v2.png",
     )
     st.sidebar.title("Image Generation")
@@ -128,81 +127,90 @@ def Main():
     st.session_state.setdefault("gen_carry_images", [])
     st.session_state.setdefault("gen_last_output", None)
 
-    # Reused-from-prior-generation images
-    if st.session_state["gen_carry_images"]:
-        st.caption("Reused from prior generation (will be sent as input):")
-        cols = st.columns(min(len(st.session_state["gen_carry_images"]), 4))
-        for i, im in enumerate(list(st.session_state["gen_carry_images"])):
-            with cols[i % len(cols)]:
-                st.image(im)
-                if st.button("✕ remove", key=f"rm_carry_{i}"):
-                    st.session_state["gen_carry_images"].pop(i)
+    l_col, r_col = st.columns(2)
+
+    with l_col:
+        # Reused-from-prior-generation images
+        if st.session_state["gen_carry_images"]:
+            # st.caption("Reused from prior generation (will be sent as input):")
+            reuse_im_container = st.expander(
+                "Reused from prior generation (will be sent as input):", expanded=True
+            )
+            cols = reuse_im_container.columns(
+                min(len(st.session_state["gen_carry_images"]), 4)
+            )
+            for i, im in enumerate(list(st.session_state["gen_carry_images"])):
+                with cols[i % len(cols)]:
+                    st.image(im, width="stretch")
+                    if st.button("✕ remove", key=f"rm_carry_{i}"):
+                        st.session_state["gen_carry_images"].pop(i)
+                        st.rerun()
+
+        uploaded = st.file_uploader(
+            "Upload one or more reference images (optional)",
+            type=["jpg", "jpeg", "png", "webp"],
+            accept_multiple_files=True,
+        )
+        if uploaded:
+            thumb_cols = st.columns(min(len(uploaded), 4))
+            for i, f in enumerate(uploaded):
+                with thumb_cols[i % len(thumb_cols)]:
+                    st.image(f, caption=f.name, use_container_width=True)
+
+        prompt = st.text_area("Prompt", placeholder="Describe the image to generate...")
+
+        c1, c2, c3 = st.columns((2, 1, 1))
+        with c1:
+            model = st.selectbox("Model", MODELS, index=0)
+        with c2:
+            aspect = st.selectbox("Aspect ratio", ASPECT_RATIOS, index=0)
+        with c3:
+            resolution = st.selectbox("Resolution", RESOLUTIONS, index=0)
+
+        # Validate 4K vs model
+        image_size = resolution
+        if resolution == "4K" and model != "google/gemini-3-pro-image-preview":
+            st.warning("4K is only supported by gemini-3-pro-image-preview — using 2K.")
+            image_size = "2K"
+
+        if st.button("Generate", type="primary", disabled=not prompt.strip()):
+            input_images = list(st.session_state["gen_carry_images"])
+            for f in uploaded or []:
+                try:
+                    input_images.append(uploaded_file_to_data_url(f))
+                except Exception as e:
+                    st.error(f"Could not read {f.name}: {e}")
+                    return None
+            with st.spinner("Generating..."):
+                out = generate_image(
+                    api_key=api_key,
+                    model=model,
+                    prompt=prompt,
+                    input_images=input_images,
+                    aspect_ratio=None if aspect == "Auto" else aspect,
+                    image_size=image_size,
+                )
+            if out:
+                st.session_state["gen_last_output"] = out
+
+    with r_col:
+        if st.session_state["gen_last_output"]:
+            st.subheader("Output")
+            out = st.session_state["gen_last_output"]
+            st.image(out)
+            dl_col, reuse_col = st.columns(2)
+            with dl_col:
+                st.download_button(
+                    "Download PNG",
+                    data=data_url_to_bytes(out),
+                    file_name="generated.png",
+                    mime="image/png",
+                )
+            with reuse_col:
+                if st.button("Use as input for next generation"):
+                    st.session_state["gen_carry_images"].append(out)
+                    st.session_state["gen_last_output"] = None
                     st.rerun()
-
-    uploaded = st.file_uploader(
-        "Upload one or more reference images (optional)",
-        type=["jpg", "jpeg", "png", "webp"],
-        accept_multiple_files=True,
-    )
-    if uploaded:
-        thumb_cols = st.columns(min(len(uploaded), 4))
-        for i, f in enumerate(uploaded):
-            with thumb_cols[i % len(thumb_cols)]:
-                st.image(f, caption=f.name, use_container_width=True)
-
-    prompt = st.text_area("Prompt", placeholder="Describe the image to generate...")
-
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        model = st.selectbox("Model", MODELS, index=0)
-    with c2:
-        aspect = st.selectbox("Aspect ratio", ASPECT_RATIOS, index=0)
-    with c3:
-        resolution = st.selectbox("Resolution", RESOLUTIONS, index=0)
-
-    # Validate 4K vs model
-    image_size = resolution
-    if resolution == "4K" and model != "google/gemini-3-pro-image-preview":
-        st.warning("4K is only supported by gemini-3-pro-image-preview — using 2K.")
-        image_size = "2K"
-
-    if st.button("Generate", type="primary", disabled=not prompt.strip()):
-        input_images = list(st.session_state["gen_carry_images"])
-        for f in uploaded or []:
-            try:
-                input_images.append(uploaded_file_to_data_url(f))
-            except Exception as e:
-                st.error(f"Could not read {f.name}: {e}")
-                return None
-        with st.spinner("Generating..."):
-            out = generate_image(
-                api_key=api_key,
-                model=model,
-                prompt=prompt,
-                input_images=input_images,
-                aspect_ratio=None if aspect == "Auto" else aspect,
-                image_size=image_size,
-            )
-        if out:
-            st.session_state["gen_last_output"] = out
-
-    if st.session_state["gen_last_output"]:
-        st.subheader("Output")
-        out = st.session_state["gen_last_output"]
-        st.image(out)
-        dl_col, reuse_col = st.columns(2)
-        with dl_col:
-            st.download_button(
-                "Download PNG",
-                data=data_url_to_bytes(out),
-                file_name="generated.png",
-                mime="image/png",
-            )
-        with reuse_col:
-            if st.button("Use as input for next generation"):
-                st.session_state["gen_carry_images"].append(out)
-                st.session_state["gen_last_output"] = None
-                st.rerun()
 
 
 Main()
